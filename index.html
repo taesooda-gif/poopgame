@@ -2,9 +2,16 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>똥 피하기 게임 - 하드코어</title>
+    <!-- 모바일 화면 비율 및 터치 확대 방지 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>똥 피하기 게임 - 모바일 지원</title>
     <style>
+        * {
+            box-sizing: border-box;
+            user-select: none; /* 텍스트 선택 방지 */
+            -webkit-user-select: none;
+            touch-action: none; /* 모바일 스크롤 및 바운스 방지 */
+        }
         body {
             background-color: #1a1a1a;
             color: #fff;
@@ -13,19 +20,56 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
+            padding: 10px;
+            overflow: hidden;
         }
-        h1 { margin-bottom: 10px; color: #ff5555; }
+        h1 { 
+            margin: 0 0 10px 0; 
+            font-size: 20px; 
+            color: #ff5555; 
+            text-align: center;
+        }
         #gameCanvas {
-            border: 4px solid #fff;
-            background-color: #5c6b73; /* 다크한 하늘색 */
-            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            border: 3px solid #fff;
+            background-color: #5c6b73;
+            box-shadow: 0 0 15px rgba(0,0,0,0.8);
+            max-width: 100%;
+            max-height: 60vh; /* 모바일 화면 높이 고려 */
+        }
+        
+        /* 모바일 터치 버튼 스타일 */
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 400px;
+            margin-top: 15px;
+            gap: 15px;
+        }
+        .btn {
+            flex: 1;
+            height: 70px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border: 2px solid #fff;
+            border-radius: 12px;
+            color: white;
+            font-size: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            outline: none;
+        }
+        .btn:active {
+            background-color: rgba(255, 255, 255, 0.5);
         }
         .instructions {
-            margin-top: 10px;
-            font-size: 14px;
+            margin-top: 8px;
+            font-size: 12px;
             color: #ccc;
+            text-align: center;
         }
     </style>
 </head>
@@ -33,7 +77,14 @@
 
     <h1>💩 똥 피하기 게임 (HARD) 🚽</h1>
     <canvas id="gameCanvas" width="400" height="600"></canvas>
-    <div class="instructions">조작: 방향키 (←, →) | 미끄러운 관성 조작 & 빨간 똥 주의!</div>
+    
+    <!-- 모바일 전용 터치 버튼 -->
+    <div class="controls">
+        <div class="btn" id="btnLeft">◀</div>
+        <div class="btn" id="btnRight">▶</div>
+    </div>
+
+    <div class="instructions">PC: 방향키(←, →) | 모바일: 하단 버튼 터치</div>
 
     <script>
         const canvas = document.getElementById("gameCanvas");
@@ -50,10 +101,10 @@
             y: canvas.height - 50,
             width: 30,
             height: 40,
-            vx: 0,           // 현재 속도 (Velocity)
-            acc: 0.8,        // 가속도 (Acceleration)
-            friction: 0.88,  // 마찰력 (Inertia/Friction - 1에 가까울수록 더 미끄러짐)
-            maxSpeed: 8      // 최대 속도
+            vx: 0,
+            acc: 0.9,
+            friction: 0.88,
+            maxSpeed: 8
         };
 
         let poops = [];
@@ -61,10 +112,11 @@
 
         const keys = { left: false, right: false };
 
+        // === PC 키보드 이벤트 ===
         document.addEventListener("keydown", (e) => {
             if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") keys.left = true;
             if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") keys.right = true;
-            if (gameOver && e.key === " ") restartGame();
+            if (gameOver && (e.key === " " || e.key === "Enter")) restartGame();
         });
 
         document.addEventListener("keyup", (e) => {
@@ -72,16 +124,48 @@
             if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") keys.right = false;
         });
 
-        // 똥 생성 (일반 똥 & 빠른 빨간 똥)
+        // === 모바일 터치 이벤트 ===
+        const btnLeft = document.getElementById("btnLeft");
+        const btnRight = document.getElementById("btnRight");
+
+        const handleTouchStart = (dir) => (e) => {
+            e.preventDefault();
+            if (gameOver) {
+                restartGame();
+                return;
+            }
+            if (dir === 'left') keys.left = true;
+            if (dir === 'right') keys.right = true;
+        };
+
+        const handleTouchEnd = (dir) => (e) => {
+            e.preventDefault();
+            if (dir === 'left') keys.left = false;
+            if (dir === 'right') keys.right = false;
+        };
+
+        btnLeft.addEventListener("touchstart", handleTouchStart('left'));
+        btnLeft.addEventListener("touchend", handleTouchEnd('left'));
+        btnRight.addEventListener("touchstart", handleTouchStart('right'));
+        btnRight.addEventListener("touchend", handleTouchEnd('right'));
+
+        // 모바일 터치로 게임 재시작 지원 (캔버스 클릭)
+        canvas.addEventListener("touchstart", (e) => {
+            if (gameOver) {
+                e.preventDefault();
+                restartGame();
+            }
+        });
+
+        // 똥 생성
         function spawnPoop() {
-            const isFast = Math.random() < 0.25; // 25% 확률로 특수 똥
+            const isFast = Math.random() < 0.25;
             const speed = isFast 
-                ? (Math.random() * 3 + 7 + difficultyLevel * 0.8)  // 빠르게 떨어지는 똥
-                : (Math.random() * 2 + 4 + difficultyLevel * 0.6); // 일반 똥
+                ? (Math.random() * 3 + 7 + difficultyLevel * 0.8)
+                : (Math.random() * 2 + 4 + difficultyLevel * 0.6);
 
             const size = 30;
             const x = Math.random() * (canvas.width - size);
-            // 좌우로 흔들리며 떨어지게 하는 변수 (drift)
             const drift = (Math.random() - 0.5) * 1.5;
 
             poops.push({ x, y: -size, size, speed, drift, isFast });
@@ -115,53 +199,50 @@
             update();
         }
 
+        function triggerVibration(pattern) {
+            if ("vibrate" in navigator) {
+                navigator.vibrate(pattern);
+            }
+        }
+
         function update() {
             if (gameOver) {
-                ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+                ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
                 ctx.fillStyle = "#FF4444";
-                ctx.font = "bold 36px sans-serif";
+                ctx.font = "bold 32px sans-serif";
                 ctx.textAlign = "center";
-                ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 20);
+                ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 30);
 
                 ctx.fillStyle = "#FFF";
                 ctx.font = "20px sans-serif";
-                ctx.fillText(`최종 점수: ${Math.floor(score)}점`, canvas.width / 2, canvas.height / 2 + 20);
+                ctx.fillText(`최종 점수: ${Math.floor(score)}점`, canvas.width / 2, canvas.height / 2 + 10);
                 
                 ctx.fillStyle = "#FFD700";
                 ctx.font = "16px sans-serif";
-                ctx.fillText("스페이스바를 눌러 다시 시작", canvas.width / 2, canvas.height / 2 + 70);
+                ctx.fillText("화면이나 버튼을 눌러 다시 시작", canvas.width / 2, canvas.height / 2 + 60);
                 return;
             }
 
             frameCount++;
             score += 0.15;
 
-            // 7초(약 420 프레임)마다 난이도 상승 (기존 10초보다 빨라짐)
             if (frameCount % 420 === 0) {
                 difficultyLevel += 1;
             }
 
-            // --- 1. 가속도 기반 플레이어 이동 ---
-            if (keys.left) {
-                player.vx -= player.acc;
-            }
-            if (keys.right) {
-                player.vx += player.acc;
-            }
+            // 플레이어 가속도 처리
+            if (keys.left) player.vx -= player.acc;
+            if (keys.right) player.vx += player.acc;
 
-            // 마찰력 적용 (키를 떼거나 반대로 누를 때 묵직하게 감속)
             player.vx *= player.friction;
 
-            // 최대 속도 제한
             if (player.vx > player.maxSpeed) player.vx = player.maxSpeed;
             if (player.vx < -player.maxSpeed) player.vx = -player.maxSpeed;
 
-            // 위치 이동
             player.x += player.vx;
 
-            // 화면 벽 충돌 처리 (튕기지 않고 속도 0으로 멈춤)
             if (player.x < 0) {
                 player.x = 0;
                 player.vx = 0;
@@ -171,30 +252,29 @@
                 player.vx = 0;
             }
 
-            // --- 2. 똥 생성 ---
-            // 난이도 상승 시 똥 쏟아지는 빈도 대폭 증가
+            // 똥 생성
             const spawnInterval = Math.max(6, 30 - difficultyLevel * 2.5);
             if (frameCount % Math.floor(spawnInterval) === 0) {
                 spawnPoop();
             }
 
-            // 변기 아이템 (난이도가 높아진 대신 변기도 12초마다 등장)
+            // 변기 생성
             if (frameCount % 720 === 0 && Math.random() < 0.7) {
                 spawnToilet();
             }
 
-            // --- 3. 똥 업데이트 및 좌우 흔들림 ---
+            // 똥 이동 및 충돌
             for (let i = poops.length - 1; i >= 0; i--) {
                 poops[i].y += poops[i].speed;
-                poops[i].x += poops[i].drift; // 좌우 비스듬히 낙하
+                poops[i].x += poops[i].drift;
 
-                // 벽에 부딪히면 튕김
                 if (poops[i].x < 0 || poops[i].x > canvas.width - poops[i].size) {
                     poops[i].drift *= -1;
                 }
 
                 if (checkCollision(player, poops[i])) {
                     gameOver = true;
+                    triggerVibration(200); // 충돌 시 0.2초 진동
                 }
 
                 if (poops[i].y > canvas.height) {
@@ -202,34 +282,31 @@
                 }
             }
 
-            // --- 4. 변기 아이템 업데이트 ---
+            // 변기 아이템 먹기
             for (let i = toilets.length - 1; i >= 0; i--) {
                 toilets[i].y += toilets[i].speed;
 
                 if (checkCollision(player, toilets[i])) {
                     toilets.splice(i, 1);
-                    poops = []; // 똥 화면 전체 클리어
+                    poops = [];
+                    triggerVibration([50, 50, 50]); // 변기 아이템 먹을 때 또록 진동
                 } else if (toilets[i].y > canvas.height) {
                     toilets.splice(i, 1);
                 }
             }
 
-            // --- 5. 렌더링 ---
+            // 그리기
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 바닥
             ctx.fillStyle = "#3a3a3a";
             ctx.fillRect(0, canvas.height - 10, canvas.width, 10);
 
-            // 플레이어
             ctx.font = "32px sans-serif";
             ctx.textAlign = "left";
             ctx.fillText("🏃", player.x - 3, player.y + 32);
 
-            // 똥 (일반 똥 / 빠르게 떨어지는 빨간 똥 연출)
             poops.forEach(p => {
                 if (p.isFast) {
-                    // 빨간 똥은 약간 불타는 듯한 느낌 표현
                     ctx.fillStyle = "#ff2222";
                     ctx.beginPath();
                     ctx.arc(p.x + 15, p.y + 15, 16, 0, Math.PI * 2);
@@ -238,12 +315,10 @@
                 ctx.fillText("💩", p.x, p.y + p.size);
             });
 
-            // 변기
             toilets.forEach(t => {
                 ctx.fillText("🚽", t.x, t.y + t.size);
             });
 
-            // UI
             ctx.fillStyle = "#FFF";
             ctx.font = "bold 18px sans-serif";
             ctx.fillText(`점수: ${Math.floor(score)}`, 15, 30);
