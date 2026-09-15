@@ -2,18 +2,17 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <!-- 모바일 화면 비율 및 터치 확대 방지 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>똥 피하기 게임 - 모바일 지원</title>
+    <title>똥 피하기 게임 - 마스터 에디션</title>
     <style>
         * {
             box-sizing: border-box;
-            user-select: none; /* 텍스트 선택 방지 */
+            user-select: none;
             -webkit-user-select: none;
-            touch-action: none; /* 모바일 스크롤 및 바운스 방지 */
+            touch-action: none;
         }
         body {
-            background-color: #1a1a1a;
+            background-color: #121212;
             color: #fff;
             font-family: sans-serif;
             display: flex;
@@ -22,101 +21,203 @@
             justify-content: center;
             min-height: 100vh;
             margin: 0;
-            padding: 10px;
+            padding: 5px;
             overflow: hidden;
         }
         h1 { 
-            margin: 0 0 10px 0; 
+            margin: 0 0 5px 0; 
             font-size: 20px; 
             color: #ff5555; 
             text-align: center;
         }
         #gameCanvas {
             border: 3px solid #fff;
-            background-color: #5c6b73;
-            box-shadow: 0 0 15px rgba(0,0,0,0.8);
+            background-color: #3a4750;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
             max-width: 100%;
-            max-height: 60vh; /* 모바일 화면 높이 고려 */
+            max-height: 55vh;
         }
-        
-        /* 모바일 터치 버튼 스타일 */
         .controls {
             display: flex;
             justify-content: space-between;
             width: 100%;
             max-width: 400px;
-            margin-top: 15px;
-            gap: 15px;
+            margin-top: 10px;
+            gap: 10px;
         }
         .btn {
             flex: 1;
-            height: 70px;
+            height: 60px;
             background-color: rgba(255, 255, 255, 0.2);
             border: 2px solid #fff;
             border-radius: 12px;
             color: white;
-            font-size: 32px;
+            font-size: 28px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
             outline: none;
         }
-        .btn:active {
-            background-color: rgba(255, 255, 255, 0.5);
+        .btn:active { background-color: rgba(255, 255, 255, 0.5); }
+        .skin-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
         }
-        .instructions {
-            margin-top: 8px;
-            font-size: 12px;
-            color: #ccc;
-            text-align: center;
+        .skin-btn {
+            background: #2a2a2a;
+            border: 2px solid #555;
+            border-radius: 8px;
+            font-size: 20px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        .skin-btn.selected {
+            border-color: #ffea00;
+            background: #444;
+        }
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        .sound-btn {
+            background: #333;
+            color: #fff;
+            border: 1px solid #777;
+            padding: 2px 8px;
+            border-radius: 5px;
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
 
-    <h1>💩 똥 피하기 게임 (HARD) 🚽</h1>
+    <div class="top-bar">
+        <span>🏆 최고 기록: <strong id="bestScoreText">0</strong></span>
+        <button class="sound-btn" id="soundBtn" onclick="toggleSound()">🔊 BGM ON</button>
+    </div>
+
+    <h1>💩 똥 피하기 (MASTER) 🚽</h1>
+    
+    <!-- 캐릭터 스킨 선택 -->
+    <div class="skin-selector">
+        <button class="skin-btn selected" onclick="selectSkin('🏃')">🏃</button>
+        <button class="skin-btn" onclick="selectSkin('🐱')">🐱</button>
+        <button class="skin-btn" onclick="selectSkin('🐶')">🐶</button>
+        <button class="skin-btn" onclick="selectSkin('🏎️')">🏎️</button>
+        <button class="skin-btn" onclick="selectSkin('🛸')">🛸</button>
+    </div>
+
     <canvas id="gameCanvas" width="400" height="600"></canvas>
     
-    <!-- 모바일 전용 터치 버튼 -->
     <div class="controls">
         <div class="btn" id="btnLeft">◀</div>
         <div class="btn" id="btnRight">▶</div>
     </div>
 
-    <div class="instructions">PC: 방향키(←, →) | 모바일: 하단 버튼 터치</div>
-
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
 
-        let gameOver = false;
+        // 게임 변수
+        let gameState = 'START'; // 'START', 'PLAYING', 'GAMEOVER'
         let score = 0;
-        let frameCount = 0;
+        let bestScore = localStorage.getItem("poop_best_score") || 0;
+        document.getElementById("bestScoreText").textContent = Math.floor(bestScore);
+        
         let difficultyLevel = 1;
+        let lastTime = performance.now();
+        let spawnTimer = 0;
+        let itemTimer = 0;
+        let difficultyTimer = 0;
+        let currentSkin = '🏃';
 
-        // 플레이어 (물리 가속도 적용)
+        // 효과 및 아이템 변수
+        let hasShield = false;
+        let slowMotionTimer = 0;
+        let comboCount = 0;
+        let comboTextTimer = 0;
+
+        // 사운드 관련 (Web Audio API)
+        let soundEnabled = true;
+        let audioCtx = null;
+        let bgmInterval = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                startBGM();
+            }
+        }
+
+        function playSound(freq, type = 'sine', duration = 0.1) {
+            if (!soundEnabled || !audioCtx) return;
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch (e) {}
+        }
+
+        function startBGM() {
+            if (bgmInterval) clearInterval(bgmInterval);
+            let notes = [261, 293, 329, 349, 392, 349, 329, 293];
+            let noteIdx = 0;
+            bgmInterval = setInterval(() => {
+                if (soundEnabled && gameState === 'PLAYING') {
+                    playSound(notes[noteIdx], 'triangle', 0.15);
+                    noteIdx = (noteIdx + 1) % notes.length;
+                }
+            }, 300);
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            document.getElementById("soundBtn").textContent = soundEnabled ? "🔊 BGM ON" : "🔇 BGM OFF";
+        }
+
+        function selectSkin(skin) {
+            currentSkin = skin;
+            document.querySelectorAll(".skin-btn").forEach(btn => {
+                btn.classList.toggle("selected", btn.textContent === skin);
+            });
+            playSound(523, 'sine', 0.1);
+        }
+
+        // 플레이어
         const player = {
             x: canvas.width / 2 - 15,
             y: canvas.height - 50,
             width: 30,
             height: 40,
             vx: 0,
-            acc: 0.9,
-            friction: 0.88,
-            maxSpeed: 8
+            acc: 1300,
+            friction: 0.005,
+            maxSpeed: 450
         };
 
         let poops = [];
-        let toilets = [];
-
+        let items = [];
         const keys = { left: false, right: false };
 
-        // === PC 키보드 이벤트 ===
+        // 조작 이벤트
         document.addEventListener("keydown", (e) => {
+            initAudio();
             if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") keys.left = true;
             if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") keys.right = true;
-            if (gameOver && (e.key === " " || e.key === "Enter")) restartGame();
+            if (gameState !== 'PLAYING' && (e.key === " " || e.key === "Enter")) restartGame();
         });
 
         document.addEventListener("keyup", (e) => {
@@ -124,16 +225,13 @@
             if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") keys.right = false;
         });
 
-        // === 모바일 터치 이벤트 ===
         const btnLeft = document.getElementById("btnLeft");
         const btnRight = document.getElementById("btnRight");
 
         const handleTouchStart = (dir) => (e) => {
             e.preventDefault();
-            if (gameOver) {
-                restartGame();
-                return;
-            }
+            initAudio();
+            if (gameState !== 'PLAYING') { restartGame(); return; }
             if (dir === 'left') keys.left = true;
             if (dir === 'right') keys.right = true;
         };
@@ -149,186 +247,287 @@
         btnRight.addEventListener("touchstart", handleTouchStart('right'));
         btnRight.addEventListener("touchend", handleTouchEnd('right'));
 
-        // 모바일 터치로 게임 재시작 지원 (캔버스 클릭)
         canvas.addEventListener("touchstart", (e) => {
-            if (gameOver) {
-                e.preventDefault();
-                restartGame();
-            }
+            initAudio();
+            if (gameState !== 'PLAYING') { e.preventDefault(); restartGame(); }
         });
 
-        // 똥 생성
+        // 똥 및 아이템 생성
         function spawnPoop() {
-            const isFast = Math.random() < 0.25;
-            const speed = isFast 
-                ? (Math.random() * 3 + 7 + difficultyLevel * 0.8)
-                : (Math.random() * 2 + 4 + difficultyLevel * 0.6);
+            const r = Math.random();
+            let type = 'NORMAL';
+            if (r < 0.2) type = 'FAST';        // 빨간 빠른 똥
+            else if (r < 0.35) type = 'DIARRHEA'; // 설사 똥 (길쭉함)
 
-            const size = 30;
-            const x = Math.random() * (canvas.width - size);
-            const drift = (Math.random() - 0.5) * 1.5;
+            let speed = (Math.random() * 100 + 230 + difficultyLevel * 25);
+            let sizeW = 30;
+            let sizeH = 30;
 
-            poops.push({ x, y: -size, size, speed, drift, isFast });
+            if (type === 'FAST') speed += 150;
+            if (type === 'DIARRHEA') {
+                sizeH = 80; // 긴 똥
+                speed += 50;
+            }
+
+            const x = Math.random() * (canvas.width - sizeW);
+            const drift = (Math.random() - 0.5) * 60;
+
+            poops.push({ x, y: -sizeH, width: sizeW, height: sizeH, speed, drift, type, nearMissed: false });
         }
 
-        // 변기 생성
-        function spawnToilet() {
-            const size = 35;
-            const x = Math.random() * (canvas.width - size);
-            toilets.push({ x, y: -size, size, speed: 3.5 });
+        function spawnItem() {
+            const r = Math.random();
+            let type = 'TOILET'; // 🚽
+            if (r < 0.35) type = 'SHIELD'; // 🛡️
+            else if (r < 0.7) type = 'CLOCK'; // ⏳
+
+            const x = Math.random() * (canvas.width - 35);
+            items.push({ x, y: -35, width: 35, height: 35, speed: 180, type });
         }
 
         function checkCollision(rect1, rect2) {
             return (
-                rect1.x < rect2.x + rect2.size &&
+                rect1.x < rect2.x + rect2.width &&
                 rect1.x + rect1.width > rect2.x &&
-                rect1.y < rect2.y + rect2.size &&
+                rect1.y < rect2.y + rect2.height &&
                 rect1.y + rect1.height > rect2.y
             );
         }
 
         function restartGame() {
-            gameOver = false;
+            gameState = 'PLAYING';
             score = 0;
-            frameCount = 0;
             difficultyLevel = 1;
+            spawnTimer = 0;
+            itemTimer = 0;
+            difficultyTimer = 0;
+            slowMotionTimer = 0;
+            comboCount = 0;
+            hasShield = false;
             poops = [];
-            toilets = [];
+            items = [];
             player.x = canvas.width / 2 - 15;
             player.vx = 0;
-            update();
+            lastTime = performance.now();
+            playSound(600, 'sine', 0.2);
+            requestAnimationFrame(update);
         }
 
         function triggerVibration(pattern) {
-            if ("vibrate" in navigator) {
-                navigator.vibrate(pattern);
-            }
+            if ("vibrate" in navigator) navigator.vibrate(pattern);
         }
 
-        function update() {
-            if (gameOver) {
-                ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+        function update(currentTime) {
+            if (gameState !== 'PLAYING') return;
 
-                ctx.fillStyle = "#FF4444";
-                ctx.font = "bold 32px sans-serif";
-                ctx.textAlign = "center";
-                ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 30);
+            const dt = Math.min((currentTime - lastTime) / 1000, 0.1);
+            lastTime = currentTime;
 
-                ctx.fillStyle = "#FFF";
-                ctx.font = "20px sans-serif";
-                ctx.fillText(`최종 점수: ${Math.floor(score)}점`, canvas.width / 2, canvas.height / 2 + 10);
-                
-                ctx.fillStyle = "#FFD700";
-                ctx.font = "16px sans-serif";
-                ctx.fillText("화면이나 버튼을 눌러 다시 시작", canvas.width / 2, canvas.height / 2 + 60);
-                return;
+            // 시간 감속 아이템 처리
+            let speedMultiplier = 1.0;
+            if (slowMotionTimer > 0) {
+                slowMotionTimer -= dt;
+                speedMultiplier = 0.4; // 60% 느려짐
             }
 
-            frameCount++;
-            score += 0.15;
+            score += dt * 10;
+            difficultyTimer += dt;
+            spawnTimer += dt;
+            itemTimer += dt;
+            if (comboTextTimer > 0) comboTextTimer -= dt;
 
-            if (frameCount % 420 === 0) {
+            // 난이도 상승 (7초 주기)
+            if (difficultyTimer >= 7) {
                 difficultyLevel += 1;
+                difficultyTimer = 0;
             }
 
-            // 플레이어 가속도 처리
-            if (keys.left) player.vx -= player.acc;
-            if (keys.right) player.vx += player.acc;
-
-            player.vx *= player.friction;
+            // 이동 처리
+            if (keys.left) player.vx -= player.acc * dt;
+            if (keys.right) player.vx += player.acc * dt;
+            player.vx *= Math.pow(player.friction, dt);
 
             if (player.vx > player.maxSpeed) player.vx = player.maxSpeed;
             if (player.vx < -player.maxSpeed) player.vx = -player.maxSpeed;
 
-            player.x += player.vx;
-
-            if (player.x < 0) {
-                player.x = 0;
-                player.vx = 0;
-            }
-            if (player.x + player.width > canvas.width) {
-                player.x = canvas.width - player.width;
-                player.vx = 0;
-            }
+            player.x += player.vx * dt;
+            if (player.x < 0) { player.x = 0; player.vx = 0; }
+            if (player.x + player.width > canvas.width) { player.x = canvas.width - player.width; player.vx = 0; }
 
             // 똥 생성
-            const spawnInterval = Math.max(6, 30 - difficultyLevel * 2.5);
-            if (frameCount % Math.floor(spawnInterval) === 0) {
+            const spawnInterval = Math.max(0.12, 0.45 - difficultyLevel * 0.035);
+            if (spawnTimer >= spawnInterval) {
                 spawnPoop();
+                spawnTimer = 0;
             }
 
-            // 변기 생성
-            if (frameCount % 720 === 0 && Math.random() < 0.7) {
-                spawnToilet();
+            // 아이템 생성 (9초 주기)
+            if (itemTimer >= 9) {
+                if (Math.random() < 0.75) spawnItem();
+                itemTimer = 0;
             }
 
             // 똥 이동 및 충돌
             for (let i = poops.length - 1; i >= 0; i--) {
-                poops[i].y += poops[i].speed;
-                poops[i].x += poops[i].drift;
+                const p = poops[i];
+                p.y += p.speed * speedMultiplier * dt;
+                p.x += p.drift * speedMultiplier * dt;
 
-                if (poops[i].x < 0 || poops[i].x > canvas.width - poops[i].size) {
-                    poops[i].drift *= -1;
+                if (p.x < 0 || p.x > canvas.width - p.width) p.drift *= -1;
+
+                // 스치기 콤보 (Near Miss) 계산
+                const distance = Math.hypot((player.x + 15) - (p.x + p.width/2), (player.y + 20) - (p.y + p.height/2));
+                if (distance < 45 && !p.nearMissed) {
+                    p.nearMissed = true;
+                    comboCount++;
+                    score += comboCount * 15;
+                    comboTextTimer = 1.0;
+                    playSound(800 + comboCount * 50, 'sine', 0.08);
                 }
 
-                if (checkCollision(player, poops[i])) {
-                    gameOver = true;
-                    triggerVibration(200); // 충돌 시 0.2초 진동
-                }
+                // 충돌 처리
+                if (checkCollision(player, p)) {
+                    if (hasShield) {
+                        hasShield = false; // 보호막 소모
+                        poops.splice(i, 1);
+                        playSound(300, 'square', 0.3);
+                        triggerVibration([100, 50, 100]);
+                    } else {
+                        // 게임 오버
+                        gameState = 'GAMEOVER';
+                        playSound(150, 'sawtooth', 0.5);
+                        triggerVibration(300);
 
-                if (poops[i].y > canvas.height) {
+                        if (score > bestScore) {
+                            bestScore = score;
+                            localStorage.setItem("poop_best_score", bestScore);
+                            document.getElementById("bestScoreText").textContent = Math.floor(bestScore);
+                        }
+                    }
+                } else if (p.y > canvas.height) {
                     poops.splice(i, 1);
                 }
             }
 
-            // 변기 아이템 먹기
-            for (let i = toilets.length - 1; i >= 0; i--) {
-                toilets[i].y += toilets[i].speed;
+            // 아이템 이동 및 먹기
+            for (let i = items.length - 1; i >= 0; i--) {
+                const it = items[i];
+                it.y += it.speed * dt;
 
-                if (checkCollision(player, toilets[i])) {
-                    toilets.splice(i, 1);
-                    poops = [];
-                    triggerVibration([50, 50, 50]); // 변기 아이템 먹을 때 또록 진동
-                } else if (toilets[i].y > canvas.height) {
-                    toilets.splice(i, 1);
+                if (checkCollision(player, it)) {
+                    if (it.type === 'TOILET') {
+                        poops = []; // 똥 전체 클리어
+                        playSound(587, 'sine', 0.3);
+                    } else if (it.type === 'SHIELD') {
+                        hasShield = true; // 쉴드 획득
+                        playSound(784, 'sine', 0.2);
+                    } else if (it.type === 'CLOCK') {
+                        slowMotionTimer = 4.0; // 4초 슬로우
+                        playSound(440, 'sine', 0.2);
+                    }
+                    triggerVibration([50, 50]);
+                    items.splice(i, 1);
+                } else if (it.y > canvas.height) {
+                    items.splice(i, 1);
                 }
             }
 
-            // 그리기
+            // === 렌더링 ===
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            ctx.fillStyle = "#3a3a3a";
+            // 바닥
+            ctx.fillStyle = "#222";
             ctx.fillRect(0, canvas.height - 10, canvas.width, 10);
+
+            // 플레이어 & 보호막 그려주기
+            if (hasShield) {
+                ctx.strokeStyle = "#00e5ff";
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(player.x + 15, player.y + 20, 25, 0, Math.PI * 2);
+                ctx.stroke();
+            }
 
             ctx.font = "32px sans-serif";
             ctx.textAlign = "left";
-            ctx.fillText("🏃", player.x - 3, player.y + 32);
+            ctx.fillText(currentSkin, player.x - 3, player.y + 32);
 
+            // 똥 출력
             poops.forEach(p => {
-                if (p.isFast) {
-                    ctx.fillStyle = "#ff2222";
+                if (p.type === 'FAST') {
+                    ctx.fillStyle = "rgba(255, 50, 50, 0.4)";
                     ctx.beginPath();
-                    ctx.arc(p.x + 15, p.y + 15, 16, 0, Math.PI * 2);
+                    ctx.arc(p.x + 15, p.y + 15, 18, 0, Math.PI * 2);
                     ctx.fill();
+                    ctx.fillText("💩", p.x, p.y + 30);
+                } else if (p.type === 'DIARRHEA') {
+                    // 설사 똥 연출 (길쭉함)
+                    ctx.font = "24px sans-serif";
+                    ctx.fillText("💩", p.x + 3, p.y + 25);
+                    ctx.fillText("💦", p.x + 3, p.y + 55);
+                    ctx.fillText("💦", p.x + 3, p.y + 80);
+                    ctx.font = "32px sans-serif";
+                } else {
+                    ctx.fillText("💩", p.x, p.y + 30);
                 }
-                ctx.fillText("💩", p.x, p.y + p.size);
             });
 
-            toilets.forEach(t => {
-                ctx.fillText("🚽", t.x, t.y + t.size);
+            // 아이템 출력
+            items.forEach(it => {
+                let icon = "🚽";
+                if (it.type === 'SHIELD') icon = "🛡️";
+                if (it.type === 'CLOCK') icon = "⏳";
+                ctx.fillText(icon, it.x, it.y + 30);
             });
 
+            // UI (점수 / 콤보 / 슬로우 모션)
             ctx.fillStyle = "#FFF";
             ctx.font = "bold 18px sans-serif";
             ctx.fillText(`점수: ${Math.floor(score)}`, 15, 30);
             ctx.fillStyle = "#FF5555";
             ctx.fillText(`난이도: LV ${difficultyLevel}`, 15, 55);
 
-            requestAnimationFrame(update);
+            if (slowMotionTimer > 0) {
+                ctx.fillStyle = "#00e5ff";
+                ctx.fillText(`⏳ 시간 감속 중! (${slowMotionTimer.toFixed(1)}s)`, 15, 80);
+            }
+
+            if (comboTextTimer > 0) {
+                ctx.fillStyle = "#ffea00";
+                ctx.font = "bold 20px sans-serif";
+                ctx.fillText(`💥 NEAR MISS x${comboCount}!`, canvas.width / 2 - 80, 120);
+            }
+
+            // 게임 오버 화면
+            if (gameState === 'GAMEOVER') {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = "#FF4444";
+                ctx.font = "bold 32px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 40);
+
+                ctx.fillStyle = "#FFF";
+                ctx.font = "20px sans-serif";
+                ctx.fillText(`최종 점수: ${Math.floor(score)}점`, canvas.width / 2, canvas.height / 2);
+                
+                ctx.fillStyle = "#FFD700";
+                ctx.fillText(`최고 기록: ${Math.floor(bestScore)}점`, canvas.width / 2, canvas.height / 2 + 35);
+
+                ctx.fillStyle = "#888";
+                ctx.font = "16px sans-serif";
+                ctx.fillText("화면이나 버튼을 눌러 다시 시작", canvas.width / 2, canvas.height / 2 + 80);
+            } else {
+                requestAnimationFrame(update);
+            }
         }
 
-        update();
+        // 초기 스타트 화면 그리기
+        ctx.fillStyle = "#FFF";
+        ctx.font = "bold 22px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("스킨 선택 후 버튼을 누르세요!", canvas.width / 2, canvas.height / 2);
     </script>
 </body>
 </html>
